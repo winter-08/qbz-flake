@@ -1,0 +1,56 @@
+name: update-check
+
+on:
+  schedule:
+    # Daily at 13:07 UTC — just after upstream's typical release window and
+    # offset from the top of the hour so GitHub's cron queue isn't saturated.
+    - cron: "7 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Bump flake to latest upstream release
+        id: bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/update.sh
+
+      - name: Verify flake still evaluates
+        if: steps.bump.outputs.updated == 'true'
+        run: nix flake check --no-build --show-trace
+
+      - name: Open pull request
+        if: steps.bump.outputs.updated == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: bot/update-qbz-${{ steps.bump.outputs.version }}
+          base: main
+          commit-message: "flake: bump qbz to v${{ steps.bump.outputs.version }}"
+          title: "flake: bump qbz to v${{ steps.bump.outputs.version }}"
+          body: |
+            Automated bump to upstream [vicrodh/qbz@v${{ steps.bump.outputs.version }}](https://github.com/vicrodh/qbz/releases/tag/v${{ steps.bump.outputs.version }}).
+
+            - Source, npm deps, and both darwin DMG hashes were re-prefetched.
+            - `nix flake check --no-build` passed on CI.
+            - Linux build from source is **not** verified in this workflow (no binary cache budget here); merge will trigger downstream builds.
+          delete-branch: true
+          labels: dependencies,automated
