@@ -24,28 +24,9 @@ latest_tag() {
 
 sri_from_json() { jq -r .hash; }
 
-nix_prefetch_github() {
-  local rev="$1"
-  nix run --extra-experimental-features 'nix-command flakes' \
-    nixpkgs#nix-prefetch-github -- vicrodh qbz --rev "$rev" | jq -r .hash
-}
-
 nix_prefetch_url() {
   local url="$1"
   nix store prefetch-file --hash-type sha256 --json "$url" | sri_from_json
-}
-
-nix_prefetch_npm_from_tarball() {
-  local tarball="$1"
-  local tmp
-  tmp="$(mktemp -d)"
-  tar -xzf "$tarball" -C "$tmp"
-  local lockfile
-  lockfile="$(find "$tmp" -maxdepth 2 -name package-lock.json | head -1)"
-  [ -n "$lockfile" ] || { log "no package-lock.json in source"; exit 1; }
-  nix run --extra-experimental-features 'nix-command flakes' \
-    nixpkgs#prefetch-npm-deps -- "$lockfile"
-  rm -rf "$tmp"
 }
 
 # Read the current pinned version directly from flake.nix so this script has
@@ -71,9 +52,10 @@ PY
 }
 
 replace_asset_hash() {
-  # replace_asset_hash <dmg-arch-suffix> <new-hash>
-  # Anchors on the DMG filename suffix in urlName (e.g. "_aarch64.dmg",
-  # "_x64.dmg") to avoid regex trouble with `${version}` inside the block.
+  # replace_asset_hash <filename-suffix> <new-hash>
+  # Anchors on the asset's filename suffix in urlName (e.g. "_aarch64.dmg",
+  # "_x64.dmg", "_amd64.tar.gz", "_aarch64.tar.gz") to avoid regex trouble
+  # with `${version}` inside the block.
   local arch_suffix="$1" new_hash="$2"
   python3 - "$FLAKE" "$arch_suffix" "$new_hash" <<'PY'
 import re, sys
@@ -106,40 +88,32 @@ main() {
     return 0
   fi
 
-  log "computing new source hash"
-  local src_hash
-  src_hash="$(nix_prefetch_github "$new_tag")"
+  log "computing linux amd64 tarball hash"
+  local linux_amd64_hash
+  linux_amd64_hash="$(nix_prefetch_url \
+    "https://github.com/${UPSTREAM}/releases/download/${new_tag}/qbz_${new_ver}_amd64.tar.gz")"
 
-  log "computing npm deps hash"
-  local tar_tmp npm_hash
-  tar_tmp="$(mktemp)"
-  if command -v gh >/dev/null 2>&1; then
-    gh api "repos/${UPSTREAM}/tarball/${new_tag}" > "$tar_tmp"
-  else
-    curl -fsSL \
-      ${GH_TOKEN:+-H "Authorization: Bearer ${GH_TOKEN}"} \
-      -o "$tar_tmp" \
-      "https://api.github.com/repos/${UPSTREAM}/tarball/${new_tag}"
-  fi
-  npm_hash="$(nix_prefetch_npm_from_tarball "$tar_tmp")"
-  rm -f "$tar_tmp"
+  log "computing linux aarch64 tarball hash"
+  local linux_aarch64_hash
+  linux_aarch64_hash="$(nix_prefetch_url \
+    "https://github.com/${UPSTREAM}/releases/download/${new_tag}/qbz_${new_ver}_aarch64.tar.gz")"
 
   log "computing darwin aarch64 dmg hash"
-  local aarch64_hash
-  aarch64_hash="$(nix_prefetch_url \
+  local darwin_aarch64_hash
+  darwin_aarch64_hash="$(nix_prefetch_url \
     "https://github.com/${UPSTREAM}/releases/download/${new_tag}/QBZ_${new_ver}_aarch64.dmg")"
 
   log "computing darwin x86_64 dmg hash"
-  local x86_64_hash
-  x86_64_hash="$(nix_prefetch_url \
+  local darwin_x86_64_hash
+  darwin_x86_64_hash="$(nix_prefetch_url \
     "https://github.com/${UPSTREAM}/releases/download/${new_tag}/QBZ_${new_ver}_x64.dmg")"
 
   log "rewriting ${FLAKE}"
   replace_line version "$new_ver"
-  replace_line srcHash "$src_hash"
-  replace_line npmHash "$npm_hash"
-  replace_asset_hash "_aarch64.dmg" "$aarch64_hash"
-  replace_asset_hash "_x64.dmg" "$x86_64_hash"
+  replace_asset_hash "_amd64.tar.gz" "$linux_amd64_hash"
+  replace_asset_hash "_aarch64.tar.gz" "$linux_aarch64_hash"
+  replace_asset_hash "_aarch64.dmg" "$darwin_aarch64_hash"
+  replace_asset_hash "_x64.dmg" "$darwin_x86_64_hash"
 
   emit "updated=true"
   log "done: bumped to v${new_ver}"

@@ -13,12 +13,20 @@
       # .github/workflows/update-check.yml.
       # ────────────────────────────────────────────────────────────────
       version = "1.2.7";
-      srcHash = "sha256-/7gYjCfMJ1TmjogGQWkRDgDaUZ8o03hVNxZ21w4xniU=";
-      npmHash = "sha256-xBad4Ms5dlE0jHZ5iKLS2dEujgIZahfNfcknJH9qoXM=";
 
-      # Per-arch prebuilt DMGs used on darwin (Tauri/WebKit is impractical to
-      # build from source on darwin under nix; upstream signs & publishes them).
-      darwinAssets = {
+      # Per-system prebuilt release assets. Upstream builds & signs the
+      # darwin .dmgs and ships matching Linux binary tarballs; using them
+      # avoids a heavy Rust/webkit toolchain in the closure and matches
+      # the upstream binary exactly.
+      releaseAssets = {
+        "x86_64-linux" = {
+          urlName = "qbz_${version}_amd64.tar.gz";
+          hash = "sha256-OU0tIjo3pPHdHkBsr2T5TT4K7NspfB26lw26hKIOKig=";
+        };
+        "aarch64-linux" = {
+          urlName = "qbz_${version}_aarch64.tar.gz";
+          hash = "sha256-BD0OXFOTjvAfmZd1daAVb/qyPcKwIisr8chIP6e622o=";
+        };
         "aarch64-darwin" = {
           urlName = "QBZ_${version}_aarch64.dmg";
           hash = "sha256-f0MPMlh5XzYRp3j5PKb8NXgtdYk1dPvCoqNa+Ywl5Ig=";
@@ -29,17 +37,14 @@
         };
       };
 
-      supportedSystems = [
-        "x86_64-linux"
-        "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
-      ];
+      supportedSystems = builtins.attrNames releaseAssets;
     in
     flake-utils.lib.eachSystem supportedSystems (system:
       let
         pkgs = import nixpkgs { inherit system; };
         inherit (pkgs) lib stdenv;
+
+        asset = releaseAssets.${system};
 
         commonMeta = {
           description = "Native, full-featured hi-fi Qobuz desktop player";
@@ -47,116 +52,111 @@
           downloadPage = "https://github.com/vicrodh/qbz/releases";
           license = lib.licenses.mit;
           mainProgram = "qbz";
+          sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
         };
 
+        # Tauri dlopens the tray implementation at runtime rather than
+        # linking it, so autoPatchelfHook can't pick these up — they need
+        # to be on LD_LIBRARY_PATH instead.
+        linuxRuntimeLibs = with pkgs; [
+          libappindicator
+          libappindicator-gtk3
+          libayatana-appindicator
+        ];
+
         # ────────────────────────────────────────────────────────────────
-        # Linux: build from source via cargo-tauri.hook.
+        # Linux: install the prebuilt upstream tarball.
         # ────────────────────────────────────────────────────────────────
-        qbzLinux = pkgs.rustPlatform.buildRustPackage (finalAttrs: {
+        qbzLinux = stdenv.mkDerivation {
           pname = "qbz";
           inherit version;
 
-          src = pkgs.fetchFromGitHub {
-            owner = "vicrodh";
-            repo = "qbz";
-            rev = "v${version}";
-            hash = srcHash;
+          src = pkgs.fetchurl {
+            url = "https://github.com/vicrodh/qbz/releases/download/v${version}/${asset.urlName}";
+            inherit (asset) hash;
           };
-
-          cargoRoot = "src-tauri";
-          buildAndTestSubdir = "src-tauri";
-          cargoLock.lockFile = "${finalAttrs.src}/src-tauri/Cargo.lock";
-
-          npmDeps = pkgs.fetchNpmDeps {
-            name = "qbz-${version}-npm-deps";
-            inherit (finalAttrs) src;
-            hash = npmHash;
-          };
-
-          # mupdf-sys runs bindgen, which needs LIBCLANG_PATH.
-          env.LIBCLANG_PATH = "${lib.getLib pkgs.llvmPackages.libclang}/lib";
 
           nativeBuildInputs = with pkgs; [
-            cargo-tauri.hook
-            clang
+            autoPatchelfHook
             makeWrapper
-            nodejs
-            npmHooks.npmConfigHook
-            pkg-config
           ];
 
           buildInputs = with pkgs; [
             alsa-lib
-            libappindicator-gtk3
-            libayatana-appindicator
+            cairo
+            dbus
+            fontconfig
+            freetype
+            gdk-pixbuf
+            glib
+            gtk3
+            harfbuzz
+            libsoup_3
             openssl
+            pango
             webkitgtk_4_1
-          ];
+            zlib
+          ] ++ linuxRuntimeLibs;
 
-          checkFlags = [
-            # Require a writable HOME and a D-Bus secret service at build time.
-            "--skip=credentials::tests::test_credentials_roundtrip"
-            "--skip=credentials::tests::test_encryption_roundtrip"
-          ];
+          installPhase = ''
+            runHook preInstall
 
-          postInstall = ''
+            install -Dm755 qbz "$out/bin/qbz"
+            cp -r icons "$out/share/"
+            install -Dm644 qbz.desktop "$out/share/applications/qbz.desktop"
+
+            runHook postInstall
+          '';
+
+          postFixup = ''
             wrapProgram $out/bin/qbz \
-              --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath (with pkgs; [
-                libappindicator
-                libappindicator-gtk3
-                libayatana-appindicator
-              ])}
+              --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath linuxRuntimeLibs}
           '';
 
           meta = commonMeta // {
             platforms = lib.platforms.linux;
           };
-        });
+        };
 
         # ────────────────────────────────────────────────────────────────
         # Darwin: install the prebuilt, upstream-signed .app bundle.
         # ────────────────────────────────────────────────────────────────
-        qbzDarwin =
-          let
-            asset = darwinAssets.${system};
-          in
-          stdenv.mkDerivation {
-            pname = "qbz";
-            inherit version;
+        qbzDarwin = stdenv.mkDerivation {
+          pname = "qbz";
+          inherit version;
 
-            src = pkgs.fetchurl {
-              url = "https://github.com/vicrodh/qbz/releases/download/v${version}/${asset.urlName}";
-              inherit (asset) hash;
-            };
-
-            nativeBuildInputs = [ pkgs.undmg ];
-            sourceRoot = ".";
-            unpackPhase = "undmg $src";
-
-            installPhase = ''
-              runHook preInstall
-
-              mkdir -p $out/Applications $out/bin
-              cp -R "QBZ.app" "$out/Applications/QBZ.app"
-
-              # CLI shim: launch the bundle's inner binary so `nix run` and
-              # PATH-based invocations work.
-              cat > $out/bin/qbz <<EOF
-              #!${pkgs.runtimeShell}
-              exec "$out/Applications/QBZ.app/Contents/MacOS/qbz" "\$@"
-              EOF
-              chmod +x $out/bin/qbz
-
-              runHook postInstall
-            '';
-
-            dontFixup = true;
-
-            meta = commonMeta // {
-              platforms = lib.platforms.darwin;
-              sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
-            };
+          src = pkgs.fetchurl {
+            url = "https://github.com/vicrodh/qbz/releases/download/v${version}/${asset.urlName}";
+            inherit (asset) hash;
           };
+
+          nativeBuildInputs = [ pkgs.undmg ];
+          sourceRoot = ".";
+          unpackPhase = "undmg $src";
+
+          installPhase = ''
+            runHook preInstall
+
+            mkdir -p $out/Applications $out/bin
+            cp -R "QBZ.app" "$out/Applications/QBZ.app"
+
+            # CLI shim: launch the bundle's inner binary so `nix run` and
+            # PATH-based invocations work.
+            cat > $out/bin/qbz <<EOF
+            #!${pkgs.runtimeShell}
+            exec "$out/Applications/QBZ.app/Contents/MacOS/qbz" "\$@"
+            EOF
+            chmod +x $out/bin/qbz
+
+            runHook postInstall
+          '';
+
+          dontFixup = true;
+
+          meta = commonMeta // {
+            platforms = lib.platforms.darwin;
+          };
+        };
 
         qbz = if stdenv.isDarwin then qbzDarwin else qbzLinux;
       in
@@ -172,29 +172,7 @@
         };
 
         devShells.default = pkgs.mkShell {
-          inputsFrom = lib.optional (!stdenv.isDarwin) qbzLinux;
-
-          # `inputsFrom` propagates buildInputs/nativeBuildInputs but not
-          # `env.*`, so LIBCLANG_PATH has to be re-exported for mupdf-sys.
-          LIBCLANG_PATH = lib.optionalString (!stdenv.isDarwin)
-            "${lib.getLib pkgs.llvmPackages.libclang}/lib";
-
-          packages = with pkgs; [
-            clippy
-            rust-analyzer
-            rustfmt
-          ];
-
-          # The installed binary is wrapped with LD_LIBRARY_PATH; inside
-          # `nix develop` we run target/debug/qbz directly with no wrapper,
-          # so we replicate the wrapper env here to make the tray loadable.
-          shellHook = lib.optionalString (!stdenv.isDarwin) ''
-            export LD_LIBRARY_PATH="${lib.makeLibraryPath (with pkgs; [
-              libappindicator
-              libappindicator-gtk3
-              libayatana-appindicator
-            ])}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          '';
+          packages = [ pkgs.nixpkgs-fmt ];
         };
 
         formatter = pkgs.nixpkgs-fmt;

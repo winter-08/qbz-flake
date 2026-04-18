@@ -4,14 +4,14 @@ A cross-platform Nix flake for [vicrodh/qbz](https://github.com/vicrodh/qbz), th
 
 ## Supported systems
 
-| System            | Source                                                    |
-|-------------------|-----------------------------------------------------------|
-| `x86_64-linux`    | built from source via `cargo-tauri.hook`                  |
-| `aarch64-linux`   | built from source via `cargo-tauri.hook`                  |
-| `x86_64-darwin`   | prebuilt, upstream-signed `.dmg` from the GitHub release  |
-| `aarch64-darwin`  | prebuilt, upstream-signed `.dmg` from the GitHub release  |
+| System            | Source                                                         |
+|-------------------|----------------------------------------------------------------|
+| `x86_64-linux`    | prebuilt `qbz_<ver>_amd64.tar.gz` from the GitHub release      |
+| `aarch64-linux`   | prebuilt `qbz_<ver>_aarch64.tar.gz` from the GitHub release    |
+| `x86_64-darwin`   | prebuilt, upstream-signed `.dmg` from the GitHub release       |
+| `aarch64-darwin`  | prebuilt, upstream-signed `.dmg` from the GitHub release       |
 
-Tauri's WebKit/Cocoa graph is impractical to build from source on darwin under nix, so darwin installs the upstream-signed bundle instead. The CLI shim at `$out/bin/qbz` execs the binary inside `QBZ.app`, and the bundle itself is exposed at `$out/Applications/QBZ.app` for nix-darwin's `system.applications`.
+Every system installs the upstream-signed binary. On Linux, `autoPatchelfHook` rewrites RPATH against nixpkgs' webkit/gtk stack and the CLI is wrapped with `LD_LIBRARY_PATH` so the dlopen'd tray indicator libs resolve. On darwin, the CLI shim at `$out/bin/qbz` execs the binary inside `QBZ.app`, and the bundle itself is exposed at `$out/Applications/QBZ.app` for nix-darwin's `system.applications`.
 
 ## Usage
 
@@ -21,9 +21,6 @@ nix run github:winter-08/qbz-flake
 
 # install into profile
 nix profile install github:winter-08/qbz-flake
-
-# dev shell (Linux only — darwin uses the prebuilt bundle)
-nix develop github:winter-08/qbz-flake
 ```
 
 As a flake input:
@@ -42,7 +39,7 @@ As a flake input:
 
 ## Updating
 
-Version, source hash, npm deps hash, and both darwin DMG hashes are pinned in `flake.nix`. They're bumped automatically by `.github/workflows/update-check.yml`, which runs daily and opens a PR whenever upstream cuts a new tag.
+Version and the four per-system asset hashes (two Linux tarballs, two darwin DMGs) are pinned in `flake.nix`. They're bumped automatically by `.github/workflows/update-check.yml`, which runs daily and opens a PR whenever upstream cuts a new tag.
 
 To bump locally:
 

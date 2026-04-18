@@ -49,8 +49,8 @@ jobs:
           body: |
             Automated bump to upstream [vicrodh/qbz@v${{ steps.bump.outputs.version }}](https://github.com/vicrodh/qbz/releases/tag/v${{ steps.bump.outputs.version }}).
 
-            - Source, npm deps, and both darwin DMG hashes were re-prefetched.
+            - Both Linux tarball and both darwin DMG hashes were re-prefetched.
             - `nix flake check --no-build` passed on CI.
-            - Linux build from source is **not** verified in this workflow (no binary cache budget here); merge will trigger downstream builds.
+            - Per-system binary integrity is **not** verified in this workflow; merge will trigger downstream builds (autoPatchelf + wrap).
           delete-branch: true
           labels: dependencies,automated
