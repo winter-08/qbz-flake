@@ -102,7 +102,8 @@
             runHook preInstall
 
             install -Dm755 qbz "$out/bin/qbz"
-            cp -r icons "$out/share/"
+            mkdir -p "$out/share"
+            cp -r icons "$out/share/icons"
             install -Dm644 qbz.desktop "$out/share/applications/qbz.desktop"
 
             runHook postInstall
