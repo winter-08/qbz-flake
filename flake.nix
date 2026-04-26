@@ -104,7 +104,7 @@
             install -Dm755 qbz "$out/bin/qbz"
             mkdir -p "$out/share"
             cp -r icons "$out/share/icons"
-            install -Dm644 qbz.desktop "$out/share/applications/qbz.desktop"
+            install -Dm644 qbz.desktop "$out/share/applications/com.blitzfc.qbz.desktop"
 
             runHook postInstall
           '';
