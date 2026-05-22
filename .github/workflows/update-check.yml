@@ -38,6 +38,7 @@ jobs:
         run: nix flake check --no-build --show-trace
 
       - name: Open pull request
+        id: cpr
         if: steps.bump.outputs.updated == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
@@ -54,3 +55,16 @@ jobs:
             - Per-system binary integrity is **not** verified in this workflow; merge will trigger downstream builds (autoPatchelf + wrap).
           delete-branch: true
           labels: dependencies,automated
+
+      - name: Merge pull request
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          gh pr merge "$PR_NUMBER" \
+            --squash \
+            --delete-branch \
+            --subject "flake: bump qbz to v${VERSION}" \
+            --body "Automated update-check merge."
