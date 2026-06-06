@@ -12,7 +12,7 @@
       # Pinned upstream release. Bumped automatically by
       # .github/workflows/update-check.yml.
       # ────────────────────────────────────────────────────────────────
-      version = "1.2.14";
+      version = "1.2.15";
 
       # Per-system prebuilt release assets. Upstream builds & signs the
       # darwin .dmgs and ships matching Linux binary tarballs; using them
@@ -21,19 +21,19 @@
       releaseAssets = {
         "x86_64-linux" = {
           urlName = "qbz_${version}_amd64.tar.gz";
-          hash = "sha256-xJteQEB2Tv7n6ADXDnwu44G6gWxZC5WWljkScWPE7Kg=";
+          hash = "sha256-hXsLL8M8eYZQaQsAtKC3tJMQbFTuMIRnMwwvLIfKJSA=";
         };
         "aarch64-linux" = {
           urlName = "qbz_${version}_aarch64.tar.gz";
-          hash = "sha256-E4cNyR9YIL8//0gM9glRZjlNa5TEnEvvfFTVjC07hK8=";
+          hash = "sha256-SqFs9SlhYYcySs6UG33+bJ4hd/e6i1iQQXbl9nSrfBk=";
         };
         "aarch64-darwin" = {
           urlName = "QBZ_${version}_aarch64.dmg";
-          hash = "sha256-qtKQDJNdZRgPfYtWyeF1lQUl+qELzkQfrBs5sTno5wg=";
+          hash = "sha256-Vbn7b1Gmm9xpTuqxiqCy6qtDl4MvfgvHWGA2oFj+UEk=";
         };
         "x86_64-darwin" = {
           urlName = "QBZ_${version}_x64.dmg";
-          hash = "sha256-CAixaGo+xtZnzKdLV+T7j/JxE/NXRT3fwJfOmEWsUP8=";
+          hash = "sha256-b6WLoMpAn+YR29wZe57fxYnzbLP8dIiODv3AbPrg2wo=";
         };
       };
 
