@@ -12,7 +12,7 @@
       # Pinned upstream release. Bumped automatically by
       # .github/workflows/update-check.yml.
       # ────────────────────────────────────────────────────────────────
-      version = "1.2.15";
+      version = "2.0.0";
 
       # Per-system prebuilt release assets. Upstream builds & signs the
       # darwin .dmgs and ships matching Linux binary tarballs; using them
@@ -21,19 +21,19 @@
       releaseAssets = {
         "x86_64-linux" = {
           urlName = "qbz_${version}_amd64.tar.gz";
-          hash = "sha256-hXsLL8M8eYZQaQsAtKC3tJMQbFTuMIRnMwwvLIfKJSA=";
+          hash = "sha256-FVpjXvabKZ1blstxtxoyVDLJAjTzU3oEKYHn8mm5GC4=";
         };
         "aarch64-linux" = {
           urlName = "qbz_${version}_aarch64.tar.gz";
-          hash = "sha256-SqFs9SlhYYcySs6UG33+bJ4hd/e6i1iQQXbl9nSrfBk=";
+          hash = "sha256-nd013bixwNRgDzJ8A4B+Q6sJHovoaDUC9XOZ0nuXE8k=";
         };
         "aarch64-darwin" = {
           urlName = "QBZ_${version}_aarch64.dmg";
-          hash = "sha256-Vbn7b1Gmm9xpTuqxiqCy6qtDl4MvfgvHWGA2oFj+UEk=";
+          hash = "sha256-0sijbaKdofKNjvwu9UtFyuIcNAbifYvWqAle9cIeL7w=";
         };
         "x86_64-darwin" = {
           urlName = "QBZ_${version}_x64.dmg";
-          hash = "sha256-b6WLoMpAn+YR29wZe57fxYnzbLP8dIiODv3AbPrg2wo=";
+          hash = "sha256-sbfTdhzUakg21kiSM2O7DBT8n8ZWITElgOCvCXAPApI=";
         };
       };
 
@@ -131,15 +131,21 @@
             inherit (asset) hash;
           };
 
-          nativeBuildInputs = [ pkgs.undmg ];
+          nativeBuildInputs = [ pkgs._7zz ];
           sourceRoot = ".";
-          unpackPhase = "undmg $src";
+          unpackPhase = ''
+            runHook preUnpack
+
+            7zz x "$src" -o"$TMPDIR/extract" -y
+
+            runHook postUnpack
+          '';
 
           installPhase = ''
             runHook preInstall
 
             mkdir -p $out/Applications $out/bin
-            cp -R "QBZ.app" "$out/Applications/QBZ.app"
+            cp -R "$TMPDIR/extract/QBZ.app" "$out/Applications/QBZ.app"
 
             # CLI shim: launch the bundle's inner binary so `nix run` and
             # PATH-based invocations work.

@@ -32,7 +32,7 @@ nix_prefetch_url() {
 # Read the current pinned version directly from flake.nix so this script has
 # no state outside the flake itself.
 current_version() {
-  awk -F'"' '/^\s*version = "/ { print $2; exit }' "$FLAKE"
+  awk -F'"' '/^[[:space:]]*version[[:space:]]*=[[:space:]]*"/ { print $2; exit }' "$FLAKE"
 }
 
 replace_line() {

@@ -2,9 +2,10 @@ name: update-check
 
 on:
   schedule:
-    # Daily at 13:07 UTC — just after upstream's typical release window and
-    # offset from the top of the hour so GitHub's cron queue isn't saturated.
+    # Offset from the top of the hour so GitHub's cron queue isn't saturated.
+    # The later pass catches upstream releases that land after the first check.
     - cron: "7 13 * * *"
+    - cron: "37 17 * * *"
   workflow_dispatch:
 
 permissions:
