@@ -55,13 +55,15 @@
           sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
         };
 
-        # Tauri dlopens the tray implementation at runtime rather than
-        # linking it, so autoPatchelfHook can't pick these up — they need
-        # to be on LD_LIBRARY_PATH instead.
+        # qbz dlopens its windowing and tray libraries at runtime rather
+        # than linking them, so autoPatchelfHook can't pick these up — they
+        # need to be on LD_LIBRARY_PATH instead.
         linuxRuntimeLibs = with pkgs; [
           libappindicator
           libappindicator-gtk3
           libayatana-appindicator
+          libxkbcommon
+          wayland
         ];
 
         # ────────────────────────────────────────────────────────────────
