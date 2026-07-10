@@ -66,6 +66,12 @@
           wayland
         ];
 
+        linuxRuntimePrograms = with pkgs; [
+          alsa-utils
+          pipewire
+          pulseaudio
+        ];
+
         # ────────────────────────────────────────────────────────────────
         # Linux: install the prebuilt upstream tarball.
         # ────────────────────────────────────────────────────────────────
@@ -113,7 +119,8 @@
 
           postFixup = ''
             wrapProgram $out/bin/qbz \
-              --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath linuxRuntimeLibs}
+              --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath linuxRuntimeLibs} \
+              --prefix PATH : ${lib.makeBinPath linuxRuntimePrograms}
           '';
 
           meta = commonMeta // {
